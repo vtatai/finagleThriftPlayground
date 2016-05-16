@@ -1,0 +1,16 @@
+# Extracted from https://github.com/ulrich/macaron-factory/blob/master/.gitignore
+# Ignore all dotfiles...
+.*
+# except for .gitignore
+!.gitignore
+
+# Ignore Play! working directory #
+lib
+log
+logs
+precompiled
+project/project
+project/target
+target
+tmp
+activator-*.sbt

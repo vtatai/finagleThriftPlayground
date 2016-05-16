@@ -65,7 +65,7 @@ class Hello$FinagleService(
 
   protected val functionMap = new mutable$HashMap[String, (TProtocol, Int) => Future[Array[Byte]]]()
 
-  protected def addFunction(name: String, f: (TProtocol, Int) => Future[Array[Byte]]) {
+  def addFunction(name: String, f: (TProtocol, Int) => Future[Array[Byte]]) {
     functionMap(name) = f
   }
 
@@ -137,34 +137,37 @@ class Hello$FinagleService(
     val FailuresCounter = scopedStats.scope("hi").counter("failures")
     val FailuresScope = scopedStats.scope("hi").scope("failures")
   }
-  addFunction("hi", { (iprot: TProtocol, seqid: Int) =>
-    try {
-      __stats_hi.RequestsCounter.incr()
-      val args = Hi.Args.decode(iprot)
-      iprot.readMessageEnd()
-      (try {
-        iface.hi()
-      } catch {
-        case e: Exception => Future.exception(e)
-      }).flatMap { value: String =>
-        reply("hi", seqid, Hi.Result(success = Some(value)))
-      }.rescue {
-        case e => Future.exception(e)
-      }.respond {
-        case Return(_) =>
-          __stats_hi.SuccessCounter.incr()
-        case Throw(ex) =>
-          __stats_hi.FailuresCounter.incr()
-          __stats_hi.FailuresScope.counter(Throwables.mkString(ex): _*).incr()
-      }
-    } catch {
-      case e: TProtocolException => {
+  def createHiFunction(): (TProtocol, Int) => Future[Array[Byte]] = {
+    { (iprot: TProtocol, seqid: Int) =>
+      try {
+        __stats_hi.RequestsCounter.incr()
+        val args = Hi.Args.decode(iprot)
         iprot.readMessageEnd()
-        exception("hi", seqid, TApplicationException.PROTOCOL_ERROR, e.getMessage)
+        (try {
+          iface.hi()
+        } catch {
+          case e: Exception => Future.exception(e)
+        }).flatMap { value: String =>
+          reply("hi", seqid, Hi.Result(success = Some(value)))
+        }.rescue {
+          case e => Future.exception(e)
+        }.respond {
+          case Return(_) =>
+            __stats_hi.SuccessCounter.incr()
+          case Throw(ex) =>
+            __stats_hi.FailuresCounter.incr()
+            __stats_hi.FailuresScope.counter(Throwables.mkString(ex): _*).incr()
+        }
+      } catch {
+        case e: TProtocolException => {
+          iprot.readMessageEnd()
+          exception("hi", seqid, TApplicationException.PROTOCOL_ERROR, e.getMessage)
+        }
+        case e: Exception => Future.exception(e)
       }
-      case e: Exception => Future.exception(e)
     }
-  })
+  }
+  addFunction("hi", createHiFunction())
   private[this] object __stats_hello {
     val RequestsCounter = scopedStats.scope("hello").counter("requests")
     val SuccessCounter = scopedStats.scope("hello").counter("success")

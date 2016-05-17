@@ -114,6 +114,7 @@ class Hello$FinagleService(
 
     try {
       val msg = iprot.readMessageBegin()
+      println(s"HAHAHHAHA: ${msg.name}")
       val func = functionMap.get(msg.name)
       func match {
         case _root_.scala.Some(fn) =>

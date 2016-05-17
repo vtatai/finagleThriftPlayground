@@ -1,11 +1,10 @@
 package com.example
 
-import com.twitter.finagle.{Service, SimpleFilter, Thrift}
-import com.twitter.finagle.example.thriftscala.Hello.{FinagledService, FutureIface}
-import com.twitter.finagle.example.thriftscala.{Hello, Hello$FinagleService}
+import com.twitter.finagle.example.thriftscala.Hello
 import com.twitter.finagle.thrift.ClientId
+import com.twitter.finagle.{Service, SimpleFilter, Thrift}
 import com.twitter.util.{Await, Future}
-import org.apache.thrift.protocol.{TProtocol, TProtocolFactory}
+import org.apache.thrift.transport.TMemoryInputTransport
 
 object ThriftServer {
 
@@ -23,27 +22,23 @@ object ThriftServer {
     }
     val finagledService: Hello.FinagledService = new Hello.FinagledService(thriftServiceImpl, Thrift.protocolFactory)
 
-    finagledService.addFunction("hi", new WrapperFunction(finagledService.createHiFunction()).apply)
-    val server = Thrift.server.serve("localhost:8081", finagledService)
+    val protocolFactory = Thrift.protocolFactory
+    val filter = new SimpleFilter[Array[Byte], Array[Byte]] {
+      def apply(req: Array[Byte], service: Service[Array[Byte], Array[Byte]]): Future[Array[Byte]] = {
+        val inputTransport = new TMemoryInputTransport(req)
+        val iprot = protocolFactory.getProtocol(inputTransport)
+        try {
+          val msg = iprot.readMessageBegin()
+          val func = msg.name
+          println(s"Message name: $func")
+        } catch {
+          case e: Exception => Future.exception(e)
+        }
+        println("filter executed!!!!")
+        service(req)
+      }
+    }
+    val server = Thrift.server.serve("localhost:8081", filter andThen finagledService)
     Await.ready(server)
-  }
-}
-
-class WrapperFunction(wrapped: ((TProtocol, Int) => Future[Array[Byte]])) {
-  def apply(prot: TProtocol, v: Int): Future[Array[Byte]] = {
-    println("FOOOOOO")
-    wrapped(prot, v)
-  }
-}
-
-class MyFinagledService(
-                         iface: FutureIface,
-                         protocolFactory: TProtocolFactory)
-  extends Hello$FinagleService(
-    iface,
-    protocolFactory) {
-
-  override def addFunction(name: String, f: (TProtocol, Int) => Future[Array[Byte]]) {
-    functionMap(name) = f
   }
 }

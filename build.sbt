@@ -1,4 +1,4 @@
-name := "finagle-thrift-server-quickstart"
+name := "finagle-thrift-playground"
 
 version := "0.1.0"
 

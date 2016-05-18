@@ -1,44 +1,31 @@
 package com.example
 
 import com.twitter.finagle.example.thriftscala.Hello
-import com.twitter.finagle.thrift.ClientId
+import com.twitter.finagle.example.thriftscala.Hello.Hi.{Args, Result}
 import com.twitter.finagle.{Service, SimpleFilter, Thrift}
 import com.twitter.util.{Await, Future}
-import org.apache.thrift.transport.TMemoryInputTransport
 
 object ThriftServer {
 
   def main(args: Array[String]) {
-    val thriftServiceImpl = new Hello.FutureIface {
-      def hi() = {
-        println("received request")
-        println(s"Client id: ${ClientId.current}")
-        Future("hi there")
-      }
-
-      override def hello(): Future[String] = {
-        Future("hello there")
+    val filter = new SimpleFilter[Hello.Hi.Args, Hello.Hi.Result] {
+      override def apply(request: Args, service: Service[Args, Result]): Future[Result] = {
+        println("hahaha")
+        service(request)
       }
     }
-    val finagledService: Hello.FinagledService = new Hello.FinagledService(thriftServiceImpl, Thrift.protocolFactory)
-
-    val protocolFactory = Thrift.protocolFactory
-    val filter = new SimpleFilter[Array[Byte], Array[Byte]] {
-      def apply(req: Array[Byte], service: Service[Array[Byte], Array[Byte]]): Future[Array[Byte]] = {
-        val inputTransport = new TMemoryInputTransport(req)
-        val iprot = protocolFactory.getProtocol(inputTransport)
-        try {
-          val msg = iprot.readMessageBegin()
-          val func = msg.name
-          println(s"Message name: $func")
-        } catch {
-          case e: Exception => Future.exception(e)
-        }
-        println("filter executed!!!!")
-        service(req)
+    val hiService = new Service[Hello.Hi.Args, Hello.Hi.Result] {
+      override def apply(request: Hello.Hi.Args): Future[Hello.Hi.Result] = {
+        Future(Hello.Hi.Result(Some("hi!")))
       }
     }
-    val server = Thrift.server.serve("localhost:8081", filter andThen finagledService)
+    val helloService = new Service[Hello.Hello.Args, Hello.Hello.Result] {
+      override def apply(request: Hello.Hello.Args): Future[Hello.Hello.Result] = {
+        Future(Hello.Hello.Result(Some("hello!")))
+      }
+    }
+    val serviceImpl = Hello.ServiceIface(hi = filter andThen hiService, hello = helloService)
+    val server = Thrift.serveIface("localhost:8081", Hello.MethodIfaceBuilder.newMethodIface(serviceImpl))
     Await.ready(server)
   }
 }

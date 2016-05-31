@@ -2,6 +2,7 @@ package com.example
 
 import com.twitter.finagle.example.thriftscala.Hello
 import com.twitter.finagle.example.thriftscala.Hello.Hi.{Args, Result}
+import com.twitter.finagle.thrift.ClientId
 import com.twitter.finagle.{Service, SimpleFilter, Thrift, ThriftMux}
 import com.twitter.util.{Await, Future}
 

@@ -5,29 +5,70 @@
  */
 package com.twitter.finagle.example.thriftjava;
 
-import org.apache.commons.lang.builder.HashCodeBuilder;
+import com.twitter.finagle.Filter;
+import com.twitter.finagle.thrift.ThriftClientRequest;
+import com.twitter.finagle.thrift.ThriftServiceIface;
+import com.twitter.scrooge.ThriftException;
+import com.twitter.scrooge.ThriftMethod;
+import com.twitter.scrooge.ThriftResponse;
+import com.twitter.scrooge.ThriftResponse$;
+import com.twitter.scrooge.ThriftService;
+import com.twitter.scrooge.ThriftStruct;
+import com.twitter.scrooge.ThriftStructCodec3;
+import com.twitter.scrooge.ToThriftService;
+import com.twitter.util.Function;
+import com.twitter.util.Function2;
+import com.twitter.util.Future;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.Collections;
-import java.util.Arrays;
+import org.apache.commons.lang.builder.HashCodeBuilder;
+import org.apache.thrift.TApplicationException;
+import org.apache.thrift.TBase;
+import org.apache.thrift.TBaseHelper;
+import org.apache.thrift.TException;
+import org.apache.thrift.TFieldIdEnum;
+import org.apache.thrift.TFieldRequirementType;
+import org.apache.thrift.TProcessor;
+import org.apache.thrift.TServiceClient;
+import org.apache.thrift.TServiceClientFactory;
+import org.apache.thrift.async.AsyncMethodCallback;
+import org.apache.thrift.async.TAsyncClient;
+import org.apache.thrift.async.TAsyncClientFactory;
+import org.apache.thrift.async.TAsyncClientManager;
+import org.apache.thrift.async.TAsyncMethodCall;
+import org.apache.thrift.meta_data.FieldMetaData;
+import org.apache.thrift.meta_data.FieldValueMetaData;
+import org.apache.thrift.protocol.TField;
+import org.apache.thrift.protocol.TMessage;
+import org.apache.thrift.protocol.TMessageType;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.protocol.TProtocolException;
+import org.apache.thrift.protocol.TProtocolFactory;
+import org.apache.thrift.protocol.TProtocolUtil;
+import org.apache.thrift.protocol.TStruct;
+import org.apache.thrift.protocol.TType;
+import org.apache.thrift.transport.TMemoryBuffer;
+import org.apache.thrift.transport.TMemoryInputTransport;
+import org.apache.thrift.transport.TNonblockingTransport;
+import org.apache.thrift.transport.TTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.thrift.*;
-import org.apache.thrift.async.*;
-import org.apache.thrift.meta_data.*;
-import org.apache.thrift.transport.*;
-import org.apache.thrift.protocol.*;
+import scala.Function1;
+import scala.None;
+import scala.Option;
+import scala.collection.Iterable;
+import scala.collection.convert.WrapAsJava$;
+import scala.collection.convert.WrapAsScala;
+import scala.collection.convert.WrapAsScala$;
+import scala.runtime.AbstractPartialFunction;
 
-import com.twitter.scrooge.ThriftService;
-import com.twitter.scrooge.ToThriftService;
-import com.twitter.util.Future;
-import com.twitter.util.Function;
-import com.twitter.util.Function2;
-import com.twitter.finagle.thrift.ThriftClientRequest;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Echo {
   public interface Iface {
@@ -38,8 +79,179 @@ public class Echo {
     public void ping(String message, AsyncMethodCallback<AsyncClient.ping_call> resultHandler) throws TException;
   }
 
-  public interface ServiceIface {
+  public interface ServiceIfaceOLD {
     public Future<String> ping(String message);
+  }
+
+  public abstract static class FutureIface implements ThriftService {
+    abstract Future<String> ping(String message);
+  }
+
+  private static class BaseServiceIface implements ToThriftService {
+    protected final com.twitter.finagle.Service<Ping.Args, Ping.Result> ping;
+
+    private BaseServiceIface(com.twitter.finagle.Service<Ping.Args, Ping.Result> ping) {
+      this.ping = ping;
+    }
+
+    @Override
+    public ThriftService toThriftService() {
+      return new MethodIface(this);
+    }
+  }
+
+  public static class ServiceIface extends BaseServiceIface {
+    public ServiceIface(com.twitter.finagle.Service<Echo.Ping.Args, Echo.Ping.Result> ping) {
+      super(ping);
+    }
+
+    @Override
+    public ThriftService toThriftService() {
+      return new MethodIface(this);
+    }
+  }
+
+  private static final Ping pingMethod = new Ping();
+
+  public static class MethodIface extends FutureIface {
+    private com.twitter.finagle.Service<Ping.Args, String> __ping_service;
+
+    @SuppressWarnings("unchecked")
+    public MethodIface(final BaseServiceIface serviceIface) {
+      Filter filter = ThriftServiceIface.resultFilter(pingMethod);
+      __ping_service = filter.andThen(new com.twitter.finagle.Service<Echo.Ping.Args, Echo.Ping.Result>() {
+        // This service is only needed to adapte the types because of Scala types
+        @Override
+        public Future<Ping.Result> apply(Ping.Args request) {
+          return serviceIface.ping.apply(request);
+        }
+      });
+    }
+
+    @Override
+    public Future<String> ping(String message) {
+      return __ping_service.apply(new Ping.Args(message));
+    }
+  }
+
+  public static class Ping implements ThriftMethod {
+    public final static ArgsCodec argsCodec = new ArgsCodec();
+    public final static ResultCodec resultCodec = new ResultCodec();
+    private final static String name = "ping";
+    private final static String serviceName = "Echo";
+
+    public static class ArgsCodec extends ThriftStructCodec3<Args> {
+      @Override
+      public void encode(Args args, TProtocol oprot) throws TException {
+        args.write(oprot);
+      }
+
+      @Override
+      public Args decode(TProtocol iprot) throws TException {
+        ping_args ping_args = new ping_args();
+        ping_args.read(iprot);
+        return new Args(ping_args.getMessage());
+      }
+    }
+
+    public static class Args implements ThriftStruct {
+      private final String message;
+
+      public Args(String message) {
+        this.message = message;
+      }
+
+      public String getMessage() {
+        return message;
+      }
+
+      @Override
+      public void write(TProtocol oprot) throws TException {
+        new ping_args().write(oprot);
+      }
+    }
+
+    public static class ResultCodec extends ThriftStructCodec3<Result> {
+      @Override
+      public Result decode(TProtocol iprot) throws TException {
+        ping_result ping_result = new ping_result();
+        ping_result.read(iprot);
+        return new Result(ping_result.getSuccess());
+      }
+
+      @Override
+      public void encode(Result result, TProtocol oprot) throws TException {
+        result.write(oprot);
+      }
+    }
+
+    public static class Result implements ThriftStruct, ThriftResponse {
+      private final Option<String> success;
+
+      public Result(String message) {
+        this.success = Option.<String>apply(message);
+      }
+
+      @Override
+      public void write(TProtocol oprot) throws TException {
+        new ping_result().setSuccess(success.get()).write(oprot);
+      }
+
+      @Override
+      public Option successField() {
+        return success;
+      }
+
+      @Override
+      public Iterable<Option<ThriftException>> exceptionFields() {
+        return WrapAsScala$.MODULE$.asScalaBuffer(new ArrayList<>());
+      }
+
+      @Override
+      public Option<ThriftException> firstException() {
+        for (Option<ThriftException> e : WrapAsJava$.MODULE$.asJavaCollection(exceptionFields())) {
+          if (e.isDefined()) {
+            return e;
+          }
+        }
+        return Option.<ThriftException>apply(null);
+      }
+    }
+
+    @Override
+    public Object functionToService(Object f) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object serviceToFunction(Object svc) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public String name() {
+      return name;
+    }
+
+    @Override
+    public String serviceName() {
+      return serviceName;
+    }
+
+    @Override
+    public ThriftStructCodec3 argsCodec() {
+      return argsCodec;
+    }
+
+    @Override
+    public ThriftStructCodec3 responseCodec() {
+      return resultCodec;
+    }
+
+    @Override
+    public boolean oneway() {
+      return false;
+    }
   }
 
   public static class Client implements TServiceClient, Iface {
@@ -166,12 +378,11 @@ public class Echo {
      }
    }
 
-
-  public static class ServiceToClient implements ServiceIface {
+  public static class ServiceToClient implements ServiceIfaceOLD {
     private final com.twitter.finagle.Service<ThriftClientRequest, byte[]> service;
     private final TProtocolFactory protocolFactory;
     public ServiceToClient(com.twitter.finagle.Service<ThriftClientRequest, byte[]> service, TProtocolFactory protocolFactory) {
-      
+
       this.service = service;
       this.protocolFactory = protocolFactory;
     }
@@ -259,7 +470,7 @@ public class Echo {
         iprot.readMessageEnd();
         ping_result result = new ping_result();
         result.success = iface_.ping(args.message);
-        
+
         oprot.writeMessageBegin(new TMessage("ping", TMessageType.REPLY, seqid));
         result.write(oprot);
         oprot.writeMessageEnd();
@@ -268,18 +479,18 @@ public class Echo {
     }
   }
 
-  public static class Service extends com.twitter.finagle.Service<byte[], byte[]> {
-    private final ServiceIface iface;
+  public static class FinagleService extends com.twitter.finagle.Service<byte[], byte[]> {
+    private final FutureIface iface;
     private final TProtocolFactory protocolFactory;
     protected HashMap<String, Function2<TProtocol, Integer, Future<byte[]>>> functionMap = new HashMap<String, Function2<TProtocol, Integer, Future<byte[]>>>();
-    public Service(final ServiceIface iface, final TProtocolFactory protocolFactory) {
+    public FinagleService(final FutureIface iface, final TProtocolFactory protocolFactory) {
       this.iface = iface;
       this.protocolFactory = protocolFactory;
       functionMap.put("ping", new Function2<TProtocol, Integer, Future<byte[]>>() {
         public Future<byte[]> apply(final TProtocol iprot, final Integer seqid) {
-          ping_args args = new ping_args();
+          Ping.Args args;
           try {
-            args.read(iprot);
+            args = (Ping.Args) pingMethod.argsCodec().decode(iprot);
           } catch (TProtocolException e) {
             try {
               iprot.readMessageEnd();
@@ -315,15 +526,12 @@ public class Echo {
           try {
             return future.flatMap(new Function<String, Future<byte[]>>() {
               public Future<byte[]> apply(String value) {
-                ping_result result = new ping_result();
-                result.success = value;
-                result.setSuccessIsSet(true);
-
+                Ping.Result result = new Ping.Result(value);
                 try {
                   TMemoryBuffer memoryBuffer = new TMemoryBuffer(512);
                   TProtocol oprot = protocolFactory.getProtocol(memoryBuffer);
 
-                  oprot.writeMessageBegin(new TMessage("ping", TMessageType.REPLY, seqid));
+                  oprot.writeMessageBegin(new TMessage(Ping.name, TMessageType.REPLY, seqid));
                   result.write(oprot);
                   oprot.writeMessageEnd();
 
@@ -388,15 +596,15 @@ public class Echo {
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements TFieldIdEnum {
     MESSAGE((short)-1, "message");
-  
+
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
-  
+
     static {
       for (_Fields field : EnumSet.allOf(_Fields.class)) {
         byName.put(field.getFieldName(), field);
       }
     }
-  
+
     /**
      * Find the _Fields constant that matches fieldId, or null if its not found.
      */
@@ -408,7 +616,7 @@ public class Echo {
   	return null;
       }
     }
-  
+
     /**
      * Find the _Fields constant that matches fieldId, throwing an exception
      * if it is not found.
@@ -418,26 +626,26 @@ public class Echo {
       if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
       return fields;
     }
-  
+
     /**
      * Find the _Fields constant that matches name, or null if its not found.
      */
     public static _Fields findByName(String name) {
       return byName.get(name);
     }
-  
+
     private final short _thriftId;
     private final String _fieldName;
-  
+
     _Fields(short thriftId, String fieldName) {
       _thriftId = thriftId;
       _fieldName = fieldName;
     }
-  
+
     public short getThriftFieldId() {
       return _thriftId;
     }
-  
+
     public String getFieldName() {
       return _fieldName;
     }
@@ -490,7 +698,7 @@ public class Echo {
 
   public ping_args setMessage(String message) {
     this.message = message;
-    
+
     return this;
   }
 
@@ -632,7 +840,7 @@ public class Echo {
 
   public void write(TProtocol oprot) throws TException {
     validate();
-    
+
     oprot.writeStructBegin(STRUCT_DESC);
     if (this.message != null) {
       oprot.writeFieldBegin(MESSAGE_FIELD_DESC);
@@ -675,15 +883,15 @@ public class Echo {
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements TFieldIdEnum {
     SUCCESS((short)0, "success");
-  
+
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
-  
+
     static {
       for (_Fields field : EnumSet.allOf(_Fields.class)) {
         byName.put(field.getFieldName(), field);
       }
     }
-  
+
     /**
      * Find the _Fields constant that matches fieldId, or null if its not found.
      */
@@ -695,7 +903,7 @@ public class Echo {
   	return null;
       }
     }
-  
+
     /**
      * Find the _Fields constant that matches fieldId, throwing an exception
      * if it is not found.
@@ -705,26 +913,26 @@ public class Echo {
       if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
       return fields;
     }
-  
+
     /**
      * Find the _Fields constant that matches name, or null if its not found.
      */
     public static _Fields findByName(String name) {
       return byName.get(name);
     }
-  
+
     private final short _thriftId;
     private final String _fieldName;
-  
+
     _Fields(short thriftId, String fieldName) {
       _thriftId = thriftId;
       _fieldName = fieldName;
     }
-  
+
     public short getThriftFieldId() {
       return _thriftId;
     }
-  
+
     public String getFieldName() {
       return _fieldName;
     }
@@ -777,7 +985,7 @@ public class Echo {
 
   public ping_result setSuccess(String success) {
     this.success = success;
-    
+
     return this;
   }
 
@@ -947,7 +1155,4 @@ public class Echo {
     // check for required fields
   }
 }
-
-
-
 }

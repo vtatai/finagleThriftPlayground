@@ -10,11 +10,10 @@ import com.twitter.util.TimeoutException;
 
 public class JavaEchoServer {
     public static void main(String[] args) throws InterruptedException, TimeoutException {
-//        Await.ready(Thrift.server()
-//                .serveIface("localhost:8081", (Echo.ServiceIface) message -> Future.value("Java: " + message)));
         Service<Echo.Ping.Args, Echo.Ping.Result> ping = new Service<Echo.Ping.Args, Echo.Ping.Result>() {
             @Override
             public Future<Echo.Ping.Result> apply(Echo.Ping.Args request) {
+                System.out.println(request.getMessage());
                 return Future.value(new Echo.Ping.Result("Ping: " + request.getMessage()));
             }
         };

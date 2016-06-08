@@ -6,19 +6,30 @@
 package com.twitter.finagle.example.thriftjava;
 
 import com.twitter.finagle.Filter;
+import com.twitter.finagle.Service;
+import com.twitter.finagle.SourcedException;
+import com.twitter.finagle.service.ReqRep;
+import com.twitter.finagle.service.ResponseClass;
+import com.twitter.finagle.service.ResponseClassifier;
+import com.twitter.finagle.stats.StatsReceiver;
+import com.twitter.finagle.thrift.DeserializeCtx;
 import com.twitter.finagle.thrift.ThriftClientRequest;
 import com.twitter.finagle.thrift.ThriftServiceIface;
 import com.twitter.scrooge.ThriftException;
 import com.twitter.scrooge.ThriftMethod;
 import com.twitter.scrooge.ThriftResponse;
-import com.twitter.scrooge.ThriftResponse$;
 import com.twitter.scrooge.ThriftService;
 import com.twitter.scrooge.ThriftStruct;
+import com.twitter.scrooge.ThriftStructCodec;
 import com.twitter.scrooge.ThriftStructCodec3;
 import com.twitter.scrooge.ToThriftService;
+import com.twitter.util.ConstFuture;
 import com.twitter.util.Function;
 import com.twitter.util.Function2;
 import com.twitter.util.Future;
+import com.twitter.util.Return;
+import com.twitter.util.Throw;
+import com.twitter.util.Try;
 
 import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.apache.thrift.TApplicationException;
@@ -27,14 +38,6 @@ import org.apache.thrift.TBaseHelper;
 import org.apache.thrift.TException;
 import org.apache.thrift.TFieldIdEnum;
 import org.apache.thrift.TFieldRequirementType;
-import org.apache.thrift.TProcessor;
-import org.apache.thrift.TServiceClient;
-import org.apache.thrift.TServiceClientFactory;
-import org.apache.thrift.async.AsyncMethodCallback;
-import org.apache.thrift.async.TAsyncClient;
-import org.apache.thrift.async.TAsyncClientFactory;
-import org.apache.thrift.async.TAsyncClientManager;
-import org.apache.thrift.async.TAsyncMethodCall;
 import org.apache.thrift.meta_data.FieldMetaData;
 import org.apache.thrift.meta_data.FieldValueMetaData;
 import org.apache.thrift.protocol.TField;
@@ -48,19 +51,16 @@ import org.apache.thrift.protocol.TStruct;
 import org.apache.thrift.protocol.TType;
 import org.apache.thrift.transport.TMemoryBuffer;
 import org.apache.thrift.transport.TMemoryInputTransport;
-import org.apache.thrift.transport.TNonblockingTransport;
 import org.apache.thrift.transport.TTransport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import scala.Function1;
-import scala.None;
 import scala.Option;
+import scala.PartialFunction;
 import scala.collection.Iterable;
 import scala.collection.convert.WrapAsJava$;
-import scala.collection.convert.WrapAsScala;
 import scala.collection.convert.WrapAsScala$;
-import scala.runtime.AbstractPartialFunction;
+import scala.runtime.AbstractFunction1;
+import scala.runtime.BoxedUnit;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -71,20 +71,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Echo {
-  public interface Iface {
-    public String ping(String message) throws TException;
-  }
-
-  public interface AsyncIface {
-    public void ping(String message, AsyncMethodCallback<AsyncClient.ping_call> resultHandler) throws TException;
-  }
-
-  public interface ServiceIfaceOLD {
-    public Future<String> ping(String message);
-  }
-
   public abstract static class FutureIface implements ThriftService {
-    abstract Future<String> ping(String message);
+    public abstract Future<String> ping(String message);
   }
 
   private static class BaseServiceIface implements ToThriftService {
@@ -167,7 +155,7 @@ public class Echo {
 
       @Override
       public void write(TProtocol oprot) throws TException {
-        new ping_args().write(oprot);
+        new ping_args().setMessage(message).write(oprot);
       }
     }
 
@@ -254,228 +242,114 @@ public class Echo {
     }
   }
 
-  public static class Client implements TServiceClient, Iface {
-    public static class Factory implements TServiceClientFactory<Client> {
-      public Factory() {}
-      public Client getClient(TProtocol prot) {
-        return new Client(prot);
-      }
-      public Client getClient(TProtocol iprot, TProtocol oprot) {
-        return new Client(iprot, oprot);
-      }
-    }
-
-    public Client(TProtocol prot)
-    {
-      this(prot, prot);
-    }
-
-    public Client(TProtocol iprot, TProtocol oprot)
-    {
-      iprot_ = iprot;
-      oprot_ = oprot;
-    }
-
-    protected TProtocol iprot_;
-    protected TProtocol oprot_;
-
-    protected int seqid_;
-
-    public TProtocol getInputProtocol()
-    {
-      return this.iprot_;
-    }
-
-    public TProtocol getOutputProtocol()
-    {
-      return this.oprot_;
-    }
-
-    public String ping(String message) throws TException
-    {
-      send_ping(message);
-      return recv_ping();
-    }
-
-    public void send_ping(String message) throws TException
-    {
-      oprot_.writeMessageBegin(new TMessage("ping", TMessageType.CALL, ++seqid_));
-      ping_args __args__ = new ping_args();
-      __args__.setMessage(message);
-      __args__.write(oprot_);
-      oprot_.writeMessageEnd();
-      oprot_.getTransport().flush();
-    }
-
-    public String recv_ping() throws TException
-    {
-      TMessage msg = iprot_.readMessageBegin();
-      if (msg.type == TMessageType.EXCEPTION) {
-        TApplicationException x = TApplicationException.read(iprot_);
-        iprot_.readMessageEnd();
-        throw x;
-      }
-      if (msg.seqid != seqid_) {
-        throw new TApplicationException(TApplicationException.BAD_SEQUENCE_ID, "ping failed: out of sequence response");
-      }
-      ping_result result = new ping_result();
-      result.read(iprot_);
-      iprot_.readMessageEnd();
-      if (result.isSetSuccess()) {
-        return result.success;
-      }
-      throw new TApplicationException(TApplicationException.MISSING_RESULT, "ping failed: unknown result");
-    }
-  }
-
-  public static class AsyncClient extends TAsyncClient implements AsyncIface {
-    public static class Factory implements TAsyncClientFactory<AsyncClient> {
-      private final TAsyncClientManager clientManager;
-      private final TProtocolFactory protocolFactory;
-      public Factory(TAsyncClientManager clientManager, TProtocolFactory protocolFactory) {
-        this.clientManager = clientManager;
-        this.protocolFactory = protocolFactory;
-      }
-      public AsyncClient getAsyncClient(TNonblockingTransport transport) {
-        return new AsyncClient(protocolFactory, clientManager, transport);
-      }
-    }
-
-    public AsyncClient(TProtocolFactory protocolFactory, TAsyncClientManager clientManager, TNonblockingTransport transport) {
-      super(protocolFactory, clientManager, transport);
-    }
-
-    public void ping(String message, AsyncMethodCallback<ping_call> __resultHandler__) throws TException {
-      checkReady();
-      ping_call __method_call__ = new ping_call(message, __resultHandler__, this, super.protocolFactory, super.transport);
-      manager.call(__method_call__);
-    }
-
-    public static class ping_call extends TAsyncMethodCall {
-      private String message;
-
-      public ping_call(String message, AsyncMethodCallback<ping_call> __resultHandler__, TAsyncClient __client__, TProtocolFactory __protocolFactory__, TNonblockingTransport __transport__) throws TException {
-        super(__client__, __protocolFactory__, __transport__, __resultHandler__, false);
-        this.message = message;
-      }
-
-      public void write_args(TProtocol __prot__) throws TException {
-        __prot__.writeMessageBegin(new TMessage("ping", TMessageType.CALL, 0));
-        ping_args __args__ = new ping_args();
-        __args__.setMessage(message);
-        __args__.write(__prot__);
-        __prot__.writeMessageEnd();
-      }
-
-      public String getResult() throws TException {
-        if (getState() != State.RESPONSE_READ) {
-          throw new IllegalStateException("Method call not finished!");
-        }
-        TMemoryInputTransport __memoryTransport__ = new TMemoryInputTransport(getFrameBuffer().array());
-        TProtocol __prot__ = super.client.getProtocolFactory().getProtocol(__memoryTransport__);
-        return (new Client(__prot__)).recv_ping();
-      }
-     }
-   }
-
-  public static class ServiceToClient implements ServiceIfaceOLD {
-    private final com.twitter.finagle.Service<ThriftClientRequest, byte[]> service;
+  public static class FinagledClient extends FutureIface {
+    private final Service<ThriftClientRequest, byte[]> service;
     private final TProtocolFactory protocolFactory;
-    public ServiceToClient(com.twitter.finagle.Service<ThriftClientRequest, byte[]> service, TProtocolFactory protocolFactory) {
+    private final String serviceName;
+    private final StatsReceiver statsReceiver;
+    private final PartialFunction<ReqRep, ResponseClass> responseClassifier;
 
+    public FinagledClient(Service<ThriftClientRequest, byte[]> service, TProtocolFactory protocolFactory, String serviceName, StatsReceiver statsReceiver, PartialFunction<ReqRep, ResponseClass> responseClassifier) {
       this.service = service;
       this.protocolFactory = protocolFactory;
+      this.serviceName = serviceName;
+      this.statsReceiver = statsReceiver;
+      this.responseClassifier = responseClassifier;
     }
 
-    public Future<String> ping(String message) {
+    public ThriftClientRequest encodeRequest(String name, ThriftStruct args) throws TException {
+      TMemoryBuffer buf = new TMemoryBuffer(512);
+      TProtocol oprot_ = protocolFactory.getProtocol(buf);
+      oprot_.writeMessageBegin(new TMessage(name, TMessageType.CALL, 0));
+      args.write(oprot_);
+      oprot_.writeMessageEnd();
+      oprot_.getTransport().flush();
+      byte[] bytes = Arrays.copyOfRange(buf.getArray(), 0, buf.length());
+      return new ThriftClientRequest(bytes, false);
+    }
+
+    protected <T extends ThriftStruct> T decodeResponse(byte[] resBytes, ThriftStructCodec<T> codec) throws TException {
+      TProtocol iprot = protocolFactory.getProtocol(new TMemoryInputTransport(resBytes));
+      TMessage msg = iprot.readMessageBegin();
+
       try {
-        // TODO: size
-        TMemoryBuffer __memoryTransport__ = new TMemoryBuffer(512);
-        TProtocol __prot__ = this.protocolFactory.getProtocol(__memoryTransport__);
-        __prot__.writeMessageBegin(new TMessage("ping", TMessageType.CALL, 0));
-        ping_args __args__ = new ping_args();
-        __args__.setMessage(message);
-        __args__.write(__prot__);
-        __prot__.writeMessageEnd();
+        if (msg.type == TMessageType.EXCEPTION) {
+          TApplicationException x = TApplicationException.read(iprot);
+          iprot.readMessageEnd();
+          throw x;
+        }
+        return codec.decode(iprot);
+      } finally {
+        iprot.readMessageEnd();
+      }
+    }
 
+    @Override
+    public Future<String> ping(String message) {
+//      __stats_ping.RequestsCounter.incr()
+      Ping.Args inputArgs = new Ping.Args(message);
+      Function1<byte[], Try<String>> replyDeserializer = new AbstractFunction1<byte[], Try<String>>() {
+        @Override
+        public Try<String> apply(byte[] response) {
+          try {
+            Ping.Result result = decodeResponse(response, Ping.resultCodec);
+            if(result.success.isDefined()) {
+              return new Return<>(result.success.get());
+            } else {
+              return new Throw(missingResult("ping"));
+            }
+          } catch (TException e) {
+            return new Throw(e);
+          }
+        }
+      };
 
-        byte[] __buffer__ = Arrays.copyOfRange(__memoryTransport__.getArray(), 0, __memoryTransport__.length());
-        ThriftClientRequest __request__ = new ThriftClientRequest(__buffer__, false);
-        Future<byte[]> __done__ = this.service.apply(__request__);
-        return __done__.flatMap(new Function<byte[], Future<String>>() {
-          public Future<String> apply(byte[] __buffer__) {
-            TMemoryInputTransport __memoryTransport__ = new TMemoryInputTransport(__buffer__);
-            TProtocol __prot__ = ServiceToClient.this.protocolFactory.getProtocol(__memoryTransport__);
-            try {
-              return Future.value((new Client(__prot__)).recv_ping());
-            } catch (Exception e) {
-              return Future.exception(e);
+      DeserializeCtx<String> serdeCtx = new DeserializeCtx<>(inputArgs, replyDeserializer);
+      ThriftClientRequest serialized;
+      try {
+        serialized = encodeRequest("ping", inputArgs);
+      } catch (TException e) {
+        throw new RuntimeException(e);
+      }
+      Future<String> flatMap = this.service.apply(serialized)
+              .flatMap(new AbstractFunction1<byte[], Future<String>>() {
+                @Override
+                public Future<String> apply(byte[] response) {
+                  return new ConstFuture<>(serdeCtx.deserialize(response));
+                }
+              });
+      Future<String> respond = flatMap.respond(new AbstractFunction1<Try<String>, BoxedUnit>() {
+        @Override
+        public BoxedUnit apply(Try<String> response) {
+          ResponseClass responseClass = responseClassifier.applyOrElse(
+                  new ReqRep(inputArgs, (Try) response),
+                  ResponseClassifier.Default());
+          if (responseClass instanceof ResponseClass.Successful) {
+//                  SuccessCounter.incr();
+          } else if (responseClass instanceof ResponseClass.Failed) {
+//                  __stats_ping.FailuresCounter.incr();
+            if (response instanceof Throw) {
+              setServiceName(((Throw) response).e());
+//                    __stats_ping.FailuresScope.counter(Throwables.mkString(ex):_ *).incr();
             }
           }
-        });
-      } catch (TException e) {
-        return Future.exception(e);
-      }
-    }
-  }
-
-  public static class Processor implements TProcessor {
-    private static final Logger LOGGER = LoggerFactory.getLogger(Processor.class.getName());
-    public Processor(Iface iface)
-    {
-      iface_ = iface;
-      processMap_.put("ping", new ping());
-    }
-
-    protected static interface ProcessFunction {
-      public void process(int seqid, TProtocol iprot, TProtocol oprot) throws TException;
-    }
-
-    private Iface iface_;
-    protected final HashMap<String,ProcessFunction> processMap_ = new HashMap<String,ProcessFunction>();
-
-    public boolean process(TProtocol iprot, TProtocol oprot) throws TException
-    {
-      TMessage msg = iprot.readMessageBegin();
-      ProcessFunction fn = processMap_.get(msg.name);
-      if (fn == null) {
-        TProtocolUtil.skip(iprot, TType.STRUCT);
-        iprot.readMessageEnd();
-        TApplicationException x = new TApplicationException(TApplicationException.UNKNOWN_METHOD, "Invalid method name: '"+msg.name+"'");
-        oprot.writeMessageBegin(new TMessage(msg.name, TMessageType.EXCEPTION, msg.seqid));
-        x.write(oprot);
-        oprot.writeMessageEnd();
-        oprot.getTransport().flush();
-        return true;
-      }
-      fn.process(msg.seqid, iprot, oprot);
-      return true;
-    }
-
-    private class ping implements ProcessFunction {
-      public void process(int seqid, TProtocol iprot, TProtocol oprot) throws TException
-      {
-        ping_args args = new ping_args();
-        try {
-          args.read(iprot);
-        } catch (TProtocolException e) {
-          iprot.readMessageEnd();
-          TApplicationException x = new TApplicationException(TApplicationException.PROTOCOL_ERROR, e.getMessage());
-          oprot.writeMessageBegin(new TMessage("ping", TMessageType.EXCEPTION, seqid));
-          x.write(oprot);
-          oprot.writeMessageEnd();
-          oprot.getTransport().flush();
-          return;
+          return null;
         }
-        iprot.readMessageEnd();
-        ping_result result = new ping_result();
-        result.success = iface_.ping(args.message);
+      });
+      return respond;
+    }
 
-        oprot.writeMessageBegin(new TMessage("ping", TMessageType.REPLY, seqid));
-        result.write(oprot);
-        oprot.writeMessageEnd();
-        oprot.getTransport().flush();
+    protected TApplicationException missingResult(String name) {
+      return new TApplicationException(
+              TApplicationException.MISSING_RESULT,
+              name + " failed: unknown result");
+    }
+
+    protected Throwable setServiceName(Throwable ex) {
+      if (this.serviceName != "" && ex instanceof SourcedException) {
+        ((SourcedException) ex).serviceName_$eq(this.serviceName);
       }
+      return ex;
     }
   }
 

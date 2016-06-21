@@ -17,6 +17,7 @@ object EchoServer {
 //    }
     val pingService = new Service[Echo.Ping.Args, Echo.Ping.Result] {
       override def apply(request: Echo.Ping.Args): Future[Echo.Ping.Result] = {
+        println(request.message)
         Future(Echo.Ping.Result(Some(s"ping: ${request.message}")))
       }
     }

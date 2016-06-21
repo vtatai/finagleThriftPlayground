@@ -71,20 +71,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Echo {
-  public abstract static class FutureIface implements ThriftService {
-    public abstract Future<String> ping(String message);
+  public interface FutureIface extends ThriftService {
+    Future<String> ping(String message);
   }
 
-  private static class BaseServiceIface implements ToThriftService {
-    protected final com.twitter.finagle.Service<Ping.Args, Ping.Result> ping;
+  private static abstract class BaseServiceIface implements ToThriftService {
+    private final com.twitter.finagle.Service<Ping.Args, Ping.Result> ping;
 
     private BaseServiceIface(com.twitter.finagle.Service<Ping.Args, Ping.Result> ping) {
       this.ping = ping;
-    }
-
-    @Override
-    public ThriftService toThriftService() {
-      return new MethodIface(this);
     }
   }
 
@@ -92,16 +87,13 @@ public class Echo {
     public ServiceIface(com.twitter.finagle.Service<Echo.Ping.Args, Echo.Ping.Result> ping) {
       super(ping);
     }
-
     @Override
     public ThriftService toThriftService() {
       return new MethodIface(this);
     }
   }
 
-  private static final Ping pingMethod = new Ping();
-
-  public static class MethodIface extends FutureIface {
+  public static class MethodIface implements FutureIface {
     private com.twitter.finagle.Service<Ping.Args, String> __ping_service;
 
     @SuppressWarnings("unchecked")
@@ -121,6 +113,8 @@ public class Echo {
       return __ping_service.apply(new Ping.Args(message));
     }
   }
+
+  private static final Ping pingMethod = new Ping();
 
   public static class Ping implements ThriftMethod {
     public final static ArgsCodec argsCodec = new ArgsCodec();
@@ -242,7 +236,7 @@ public class Echo {
     }
   }
 
-  public static class FinagledClient extends FutureIface {
+  public static class FinagledClient implements FutureIface {
     private final Service<ThriftClientRequest, byte[]> service;
     private final TProtocolFactory protocolFactory;
     private final String serviceName;

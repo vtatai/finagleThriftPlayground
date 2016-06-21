@@ -81,7 +81,7 @@ object Echo { self =>
     object Args extends ThriftStructCodec3[Args] {
       private val NoPassthroughFields = immutable$Map.empty[Short, TFieldBlob]
       val Struct = new TStruct("ping_args")
-      val MessageField = new TField("message", TType.STRING, -1)
+      val MessageField = new TField("message", TType.STRING, 1)
       val MessageFieldManifest = implicitly[Manifest[String]]
     
       /**
@@ -134,7 +134,7 @@ object Echo { self =>
             _done = true
           } else {
             _field.id match {
-              case -1 =>
+              case 1 =>
                 _field.`type` match {
                   case TType.STRING =>
                     message = readMessageValue(_iprot)

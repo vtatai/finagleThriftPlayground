@@ -200,4 +200,50 @@ class Hello$FinagleClient(
       }
     }
   }
+  private[this] object __stats_noAnswer {
+    val RequestsCounter = scopedStats.scope("no_answer").counter("requests")
+    val SuccessCounter = scopedStats.scope("no_answer").counter("success")
+    val FailuresCounter = scopedStats.scope("no_answer").counter("failures")
+    val FailuresScope = scopedStats.scope("no_answer").scope("failures")
+  }
+  
+  def noAnswer(): Future[Unit] = {
+    __stats_noAnswer.RequestsCounter.incr()
+    val inputArgs = NoAnswer.Args()
+    val replyDeserializer: Array[Byte] => _root_.com.twitter.util.Try[Unit] =
+      response => {
+        val result = decodeResponse(response, NoAnswer.Result)
+        val exception: Throwable =
+        null
+  
+        if (exception != null) _root_.com.twitter.util.Throw(exception) else Return.Unit
+      }
+  
+    val serdeCtx = new _root_.com.twitter.finagle.thrift.DeserializeCtx[Unit](inputArgs, replyDeserializer)
+    _root_.com.twitter.finagle.context.Contexts.local.let(
+      _root_.com.twitter.finagle.thrift.DeserializeCtx.Key,
+      serdeCtx
+    ) {
+      val serialized = encodeRequest("no_answer", inputArgs)
+      this.service(serialized).flatMap { response =>
+        Future.const(serdeCtx.deserialize(response))
+      }.respond { response =>
+        val responseClass = responseClassifier.applyOrElse(
+          ctfs.ReqRep(inputArgs, response),
+          ctfs.ResponseClassifier.Default)
+        responseClass match {
+          case ctfs.ResponseClass.Successful(_) =>
+            __stats_noAnswer.SuccessCounter.incr()
+          case ctfs.ResponseClass.Failed(_) =>
+            __stats_noAnswer.FailuresCounter.incr()
+            response match {
+              case Throw(ex) =>
+                setServiceName(ex)
+                __stats_noAnswer.FailuresScope.counter(Throwables.mkString(ex): _*).incr()
+              case _ =>
+            }
+        }
+      }
+    }
+  }
 }

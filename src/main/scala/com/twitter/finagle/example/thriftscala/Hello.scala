@@ -35,6 +35,8 @@ trait Hello[+MM[_]] extends ThriftService {
   def hi(): MM[String]
   
   def hello(): MM[String]
+  
+  def noAnswer(): MM[Unit]
 }
 
 
@@ -43,13 +45,15 @@ object Hello { self =>
 
   case class ServiceIface(
       hi : com.twitter.finagle.Service[self.Hi.Args, self.Hi.Result],
-      hello : com.twitter.finagle.Service[self.Hello.Args, self.Hello.Result]
+      hello : com.twitter.finagle.Service[self.Hello.Args, self.Hello.Result],
+      noAnswer : com.twitter.finagle.Service[self.NoAnswer.Args, self.NoAnswer.Result]
   ) extends BaseServiceIface
 
   // This is needed to support service inheritance.
   trait BaseServiceIface extends ToThriftService {
     def hi : com.twitter.finagle.Service[self.Hi.Args, self.Hi.Result]
     def hello : com.twitter.finagle.Service[self.Hello.Args, self.Hello.Result]
+    def noAnswer : com.twitter.finagle.Service[self.NoAnswer.Args, self.NoAnswer.Result]
 
     override def toThriftService: ThriftService = new MethodIface(this)
   }
@@ -63,7 +67,8 @@ object Hello { self =>
       ): ServiceIface =
         new ServiceIface(
           hi = ThriftServiceIface(self.Hi, binaryService, pf, stats),
-          hello = ThriftServiceIface(self.Hello, binaryService, pf, stats)
+          hello = ThriftServiceIface(self.Hello, binaryService, pf, stats),
+          noAnswer = ThriftServiceIface(self.NoAnswer, binaryService, pf, stats)
       )
   }
 
@@ -77,6 +82,10 @@ object Hello { self =>
       ThriftServiceIface.resultFilter(self.Hello) andThen serviceIface.hello
     def hello(): Future[String] =
       __hello_service(self.Hello.Args())
+    private[this] val __noAnswer_service =
+      ThriftServiceIface.resultFilter(self.NoAnswer) andThen serviceIface.noAnswer
+    def noAnswer(): Future[Unit] =
+      __noAnswer_service(self.NoAnswer.Args()).unit
   }
 
   implicit object MethodIfaceBuilder
@@ -751,12 +760,289 @@ object Hello { self =>
   val hello$result = Hello.Result
   type hello$result = Hello.Result
 
+  object NoAnswer extends com.twitter.scrooge.ThriftMethod {
+    
+    object Args extends ThriftStructCodec3[Args] {
+      private val NoPassthroughFields = immutable$Map.empty[Short, TFieldBlob]
+      val Struct = new TStruct("noAnswer_args")
+    
+      /**
+       * Field information in declaration order.
+       */
+      lazy val fieldInfos: scala.List[ThriftStructFieldInfo] = scala.List[ThriftStructFieldInfo](
+      )
+    
+      lazy val structAnnotations: immutable$Map[String, String] =
+        immutable$Map.empty[String, String]
+    
+      /**
+       * Checks that all required fields are non-null.
+       */
+      def validate(_item: Args): Unit = {
+      }
+    
+      def withoutPassthroughFields(original: Args): Args =
+        new Args(
+        )
+    
+      override def encode(_item: Args, _oproto: TProtocol): Unit = {
+        _item.write(_oproto)
+      }
+    
+      override def decode(_iprot: TProtocol): Args = {
+        var _passthroughFields: Builder[(Short, TFieldBlob), immutable$Map[Short, TFieldBlob]] = null
+        var _done = false
+    
+        _iprot.readStructBegin()
+        while (!_done) {
+          val _field = _iprot.readFieldBegin()
+          if (_field.`type` == TType.STOP) {
+            _done = true
+          } else {
+            _field.id match {
+              case _ =>
+                if (_passthroughFields == null)
+                  _passthroughFields = immutable$Map.newBuilder[Short, TFieldBlob]
+                _passthroughFields += (_field.id -> TFieldBlob.read(_field, _iprot))
+            }
+            _iprot.readFieldEnd()
+          }
+        }
+        _iprot.readStructEnd()
+    
+        new Args(
+          if (_passthroughFields == null)
+            NoPassthroughFields
+          else
+            _passthroughFields.result()
+        )
+      }
+    
+      def apply(
+      ): Args =
+        new Args(
+        )
+    
+      def unapply(_item: Args): Boolean = true
+    
+    
+    
+    }
+    
+    class Args(
+        val _passthroughFields: immutable$Map[Short, TFieldBlob])
+      extends ThriftStruct
+      with scala.Product
+      with java.io.Serializable
+    {
+      import Args._
+      def this(
+      ) = this(
+        Map.empty
+      )
+    
+    
+    
+    
+      override def write(_oprot: TProtocol): Unit = {
+        Args.validate(this)
+        _oprot.writeStructBegin(Struct)
+        if (_passthroughFields.nonEmpty) {
+          _passthroughFields.values.foreach { _.write(_oprot) }
+        }
+        _oprot.writeFieldStop()
+        _oprot.writeStructEnd()
+      }
+    
+      def copy(
+        _passthroughFields: immutable$Map[Short, TFieldBlob] = this._passthroughFields
+      ): Args =
+        new Args(
+          _passthroughFields
+        )
+    
+      override def canEqual(other: Any): Boolean = other.isInstanceOf[Args]
+    
+      override def equals(other: Any): Boolean =
+        canEqual(other) &&
+          _root_.scala.runtime.ScalaRunTime._equals(this, other) &&
+          _passthroughFields == other.asInstanceOf[Args]._passthroughFields
+    
+      override def hashCode: Int = _root_.scala.runtime.ScalaRunTime._hashCode(this)
+    
+      override def toString: String = _root_.scala.runtime.ScalaRunTime._toString(this)
+    
+    
+      override def productArity: Int = 0
+    
+      override def productElement(n: Int): Any = n match {
+        case _ => throw new IndexOutOfBoundsException(n.toString)
+      }
+    
+      override def productPrefix: String = "Args"
+    }
+
+    type SuccessType = Unit
+    
+    object Result extends ThriftStructCodec3[Result] {
+      private val NoPassthroughFields = immutable$Map.empty[Short, TFieldBlob]
+      val Struct = new TStruct("noAnswer_result")
+    
+      /**
+       * Field information in declaration order.
+       */
+      lazy val fieldInfos: scala.List[ThriftStructFieldInfo] = scala.List[ThriftStructFieldInfo](
+      )
+    
+      lazy val structAnnotations: immutable$Map[String, String] =
+        immutable$Map.empty[String, String]
+    
+      /**
+       * Checks that all required fields are non-null.
+       */
+      def validate(_item: Result): Unit = {
+      }
+    
+      def withoutPassthroughFields(original: Result): Result =
+        new Result(
+        )
+    
+      override def encode(_item: Result, _oproto: TProtocol): Unit = {
+        _item.write(_oproto)
+      }
+    
+      override def decode(_iprot: TProtocol): Result = {
+        var _passthroughFields: Builder[(Short, TFieldBlob), immutable$Map[Short, TFieldBlob]] = null
+        var _done = false
+    
+        _iprot.readStructBegin()
+        while (!_done) {
+          val _field = _iprot.readFieldBegin()
+          if (_field.`type` == TType.STOP) {
+            _done = true
+          } else {
+            _field.id match {
+              case _ =>
+                if (_passthroughFields == null)
+                  _passthroughFields = immutable$Map.newBuilder[Short, TFieldBlob]
+                _passthroughFields += (_field.id -> TFieldBlob.read(_field, _iprot))
+            }
+            _iprot.readFieldEnd()
+          }
+        }
+        _iprot.readStructEnd()
+    
+        new Result(
+          if (_passthroughFields == null)
+            NoPassthroughFields
+          else
+            _passthroughFields.result()
+        )
+      }
+    
+      def apply(
+      ): Result =
+        new Result(
+        )
+    
+      def unapply(_item: Result): Boolean = true
+    
+    
+    
+    }
+    
+    class Result(
+        val _passthroughFields: immutable$Map[Short, TFieldBlob])
+      extends ThriftResponse[Unit] with ThriftStruct
+      with scala.Product
+      with java.io.Serializable
+    {
+      import Result._
+      def this(
+      ) = this(
+        Map.empty
+      )
+    
+    
+      def successField: Option[Unit] = Some(Unit)
+      def exceptionFields: Iterable[Option[com.twitter.scrooge.ThriftException]] = Seq()
+    
+    
+      override def write(_oprot: TProtocol): Unit = {
+        Result.validate(this)
+        _oprot.writeStructBegin(Struct)
+        if (_passthroughFields.nonEmpty) {
+          _passthroughFields.values.foreach { _.write(_oprot) }
+        }
+        _oprot.writeFieldStop()
+        _oprot.writeStructEnd()
+      }
+    
+      def copy(
+        _passthroughFields: immutable$Map[Short, TFieldBlob] = this._passthroughFields
+      ): Result =
+        new Result(
+          _passthroughFields
+        )
+    
+      override def canEqual(other: Any): Boolean = other.isInstanceOf[Result]
+    
+      override def equals(other: Any): Boolean =
+        canEqual(other) &&
+          _root_.scala.runtime.ScalaRunTime._equals(this, other) &&
+          _passthroughFields == other.asInstanceOf[Result]._passthroughFields
+    
+      override def hashCode: Int = _root_.scala.runtime.ScalaRunTime._hashCode(this)
+    
+      override def toString: String = _root_.scala.runtime.ScalaRunTime._toString(this)
+    
+    
+      override def productArity: Int = 0
+    
+      override def productElement(n: Int): Any = n match {
+        case _ => throw new IndexOutOfBoundsException(n.toString)
+      }
+    
+      override def productPrefix: String = "Result"
+    }
+
+    type FunctionType = Function1[Args,Future[Unit]]
+    type ServiceType = com.twitter.finagle.Service[Args, Result]
+
+    private[this] val toResult = (res: SuccessType) => Result()
+
+    def functionToService(f: FunctionType): ServiceType = {
+      com.twitter.finagle.Service.mk { args: Args =>
+        f(args).map(toResult)
+      }
+    }
+
+    def serviceToFunction(svc: ServiceType): FunctionType = { args: Args =>
+      ThriftServiceIface.resultFilter(this).andThen(svc).apply(args)
+    }
+
+    val name = "no_answer"
+    val serviceName = "Hello"
+    val argsCodec = Args
+    val responseCodec = Result
+    val oneway = false
+  }
+
+  // Compatibility aliases.
+  val noAnswer$args = NoAnswer.Args
+  type noAnswer$args = NoAnswer.Args
+
+  val noAnswer$result = NoAnswer.Result
+  type noAnswer$result = NoAnswer.Result
+
 
   trait FutureIface extends Hello[Future] {
     
     def hi(): Future[String]
     
     def hello(): Future[String]
+    
+    def noAnswer(): Future[Unit]
   }
 
   class FinagledClient(

@@ -199,4 +199,38 @@ class Hello$FinagleService(
       case e: Exception => Future.exception(e)
     }
   })
+  private[this] object __stats_noAnswer {
+    val RequestsCounter = scopedStats.scope("no_answer").counter("requests")
+    val SuccessCounter = scopedStats.scope("no_answer").counter("success")
+    val FailuresCounter = scopedStats.scope("no_answer").counter("failures")
+    val FailuresScope = scopedStats.scope("no_answer").scope("failures")
+  }
+  addFunction("no_answer", { (iprot: TProtocol, seqid: Int) =>
+    try {
+      __stats_noAnswer.RequestsCounter.incr()
+      val args = NoAnswer.Args.decode(iprot)
+      iprot.readMessageEnd()
+      (try {
+        iface.noAnswer()
+      } catch {
+        case e: Exception => Future.exception(e)
+      }).flatMap { value: Unit =>
+        reply("no_answer", seqid, NoAnswer.Result())
+      }.rescue {
+        case e => Future.exception(e)
+      }.respond {
+        case Return(_) =>
+          __stats_noAnswer.SuccessCounter.incr()
+        case Throw(ex) =>
+          __stats_noAnswer.FailuresCounter.incr()
+          __stats_noAnswer.FailuresScope.counter(Throwables.mkString(ex): _*).incr()
+      }
+    } catch {
+      case e: TProtocolException => {
+        iprot.readMessageEnd()
+        exception("no_answer", seqid, TApplicationException.PROTOCOL_ERROR, e.getMessage)
+      }
+      case e: Exception => Future.exception(e)
+    }
+  })
 }

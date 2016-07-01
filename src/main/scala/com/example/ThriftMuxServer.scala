@@ -2,8 +2,7 @@ package com.example
 
 import com.twitter.finagle.example.thriftscala.Hello
 import com.twitter.finagle.example.thriftscala.Hello.Hi.{Args, Result}
-import com.twitter.finagle.thrift.ClientId
-import com.twitter.finagle.{Service, SimpleFilter, Thrift, ThriftMux}
+import com.twitter.finagle.{Service, SimpleFilter, ThriftMux}
 import com.twitter.util.{Await, Future}
 
 object ThriftMuxServer {
@@ -25,7 +24,12 @@ object ThriftMuxServer {
         Future(Hello.Hello.Result(Some("hello!")))
       }
     }
-    val serviceImpl = Hello.ServiceIface(hi = filter andThen hiService, hello = helloService)
+    val noAnswerService = new Service[Hello.NoAnswer.Args, Hello.NoAnswer.Result] {
+      override def apply(request: Hello.NoAnswer.Args): Future[Hello.NoAnswer.Result] = {
+        Future(Hello.NoAnswer.Result())
+      }
+    }
+    val serviceImpl = Hello.ServiceIface(hi = filter andThen hiService, hello = helloService, noAnswer = noAnswerService)
     val server = ThriftMux.serveIface("localhost:8081", Hello.MethodIfaceBuilder.newMethodIface(serviceImpl))
     Await.ready(server)
   }

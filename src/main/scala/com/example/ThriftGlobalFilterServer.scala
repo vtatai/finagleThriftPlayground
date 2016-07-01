@@ -16,6 +16,10 @@ object ThriftGlobalFilterServer {
       override def hello(): Future[String] = {
         Future("hello there")
       }
+
+      override def noAnswer(): Future[Unit] = {
+        Future()
+      }
     }
     val filter = new SimpleFilter[Array[Byte], Array[Byte]] {
       override def apply(request: Array[Byte], service: Service[Array[Byte], Array[Byte]]): Future[Array[Byte]] = {
